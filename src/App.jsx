@@ -356,61 +356,73 @@ const App = () => {
     return [...items].sort((a, b) => a[key].localeCompare(b[key], 'ko'));
   };
 
-  // --- Gemini API 호출 함수 ---
+  // --- Gemini API 호출 함수 (수정됨) ---
   const generateScheduleWithAI = async () => {
     const weekDays = getWeekDays(currentYear, currentMonth, currentWeek);
     const scheduleKey = `${currentYear}-${currentMonth}-${currentWeek}`;
     const currentSchedule = scheduleData[scheduleKey] || {};
     
-    let needsDirector = false;
+    // 1. 모든 진료실에 원장이 배정되었는지 확인
+    let isDirectorMissing = false;
     for (const day of weekDays) {
         if (day.isHoliday) continue;
         for (const room of rooms) {
             if (room.hasTimeSlots) {
                 const daySchedule = currentSchedule[day.date]?.[room.name];
                 if (!daySchedule?.morning?.director || !daySchedule?.afternoon?.director) {
-                    needsDirector = true;
+                    isDirectorMissing = true;
                     break;
                 }
             }
         }
-        if (needsDirector) break;
+        if (isDirectorMissing) break;
     }
 
-    if (!needsDirector) {
-        setAiError({ title: 'AI 생성 불필요', message: '모든 진료실의 오전/오후에 원장님이 배정되어 있습니다. AI 스케줄을 생성할 필요가 없습니다.' });
+    // 2. 원장이 비어있으면 팝업 표시 후 생성 중단
+    if (isDirectorMissing) {
+        setAiError({ 
+            title: '원장 배치 필요', 
+            message: '모든 진료실의 오전/오후에 원장님을 먼저 배정해주세요. AI 스케줄 생성은 그 후에 가능합니다.' 
+        });
         return;
     }
 
     setIsAiLoading(true);
     showNotification('✨ AI가 스케줄을 생성하고 있습니다...');
+
+    // 3. AI에게 전달할 현재 스케줄 정보 구성
+    const offStaffByDay = {};
+    weekDays.forEach(day => {
+      offStaffByDay[day.date] = [];
+      const offSchedule = currentSchedule[day.date]?.['OFF'];
+      if (offSchedule?.people) {
+        offSchedule.people.forEach(p => offStaffByDay[day.date].push(p.name));
+      }
+    });
     
     const prompt = `
-      You are an expert hospital scheduler. Create an optimal weekly work schedule in JSON format based on the following information.
+      You are an expert hospital scheduler. Your task is to complete a weekly work schedule by assigning only the staff members. The directors have already been manually assigned.
 
       1. Personnel Information:
-      - Directors: ${directors.map(d => `${d.name}(${d.abbrev})`).join(', ')}
       - Existing Staff: ${staff.filter(s => !s.isNew).map(s => s.name).join(', ')}
       - New Staff: ${staff.filter(s => s.isNew).map(s => s.name).join(', ')}
 
-      2. Room Information:
-      ${rooms.map(r => `- ${r.name}: ${r.hasTimeSlots ? 'AM/PM shifts' : 'Single shift'}${r.allowNewStaffPairing ? ' (New staff pairing allowed)' : ''}`).join('\n')}
+      2. Current Schedule State (Directors are pre-assigned, some staff might be OFF):
+      ${JSON.stringify(currentSchedule, null, 2)}
 
       3. Dates for this week:
       ${weekDays.map(d => `- ${d.date}${d.isHoliday ? ` (${d.holidayName}, Holiday)` : ''}`).join('\n')}
 
-      4. Scheduling Rules:
-      - Distribute assignments as fairly as possible among all personnel.
-      - Directors can only be assigned to rooms with 'AM/PM shifts'. They cannot be assigned to 'Injection' or 'Surgery' rooms.
-      - A director can only be assigned to ONE room per day (they can work both AM and PM in that single room).
-      - Staff can be assigned to any room.
-      - In rooms marked 'New staff pairing allowed', you MUST assign one new staff member and one existing staff member together in each AM/PM slot.
-      - New staff cannot work alone and must always be paired with an existing staff member.
-      - Staff cannot be assigned to multiple places on the same day.
-      - All workstations must be empty on holidays.
-      - Assign 1-2 'OFF' days per person per week.
-      - Both directors and staff can be assigned to 'OFF'.
-      - The output must strictly follow the provided JSON schema. Do not include any other text or explanations, only the JSON object.
+      4. Scheduling Rules for STAFF ONLY:
+      - Your goal is to assign staff to work with the pre-assigned directors. DO NOT change the director assignments.
+      - Distribute staff assignments as fairly and evenly as possible among all directors throughout the week.
+      - In rooms marked 'New staff pairing allowed' (${rooms.filter(r => r.allowNewStaffPairing).map(r=>r.name).join(', ')}), you MUST pair one new staff member with one existing staff member in each AM/PM slot.
+      - New staff cannot work alone.
+      - A staff member cannot be in multiple places at once on the same day.
+      - Do not assign any staff to work on holidays.
+      - Staff listed in 'OFF' for a specific day must NOT be assigned any other work on that day. For example: ${JSON.stringify(offStaffByDay)}
+      - Fill in the staff for 'Injection' and 'Surgery' rooms as well, following the same fairness and pairing rules where applicable.
+      - The final output must be a complete JSON object for the entire week's schedule, including the pre-assigned directors and the staff you assign. Strictly follow the provided JSON schema. Do not add any other text or explanations.
     `;
 
     const personSchema = {
@@ -472,7 +484,7 @@ const App = () => {
     
     try {
         const apiKey = ""; // API 키는 런타임에 자동으로 제공됩니다.
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-preview-0514:generateContent?key=${apiKey}`;
 
         const payload = {
           contents: [{ parts: [{ text: prompt }] }],
