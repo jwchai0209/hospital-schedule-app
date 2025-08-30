@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, X, Settings, GripVertical, Edit3, Upload, Printer, LogOut, User, Mail, Lock, Eye, EyeOff, Sparkles, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, X, Settings, GripVertical, Edit3, Upload, Printer, LogOut, User, Users, Mail, Lock, Eye, EyeOff, Sparkles, AlertTriangle } from 'lucide-react';
 
-const APP_VERSION = "v1.1.0";
+const APP_VERSION = "v1.2.0";
 const BUILD_DATE = "2025-08-30";
 
 // --- 로그인/회원가입 컴포넌트 분리 ---
@@ -135,7 +135,7 @@ const App = () => {
   const [rooms, setRooms] = useState([
     { id: 'room1', name: '1진료실', hasTimeSlots: true, order: 1, allowNewStaffPairing: true },
     { id: 'room2', name: '2진료실', hasTimeSlots: true, order: 2, allowNewStaffPairing: false },
-    { id: 'room3', name: '주사', hasTimeSlots: false, order: 3, allowNewStaffPairing: false },
+    { id: 'room3', name: '주사', hasTimeSlots: false, order: 3, allowNewStaffPairing: true },
     { id: 'room4', name: '수술', hasTimeSlots: false, order: 4, allowNewStaffPairing: false },
     { id: 'off', name: 'OFF', hasTimeSlots: false, order: 99, allowNewStaffPairing: false }
   ]);
@@ -156,7 +156,7 @@ const App = () => {
     document.head.appendChild(kakaoScript);
     kakaoScript.onload = () => {
       if (window.Kakao && !window.Kakao.isInitialized()) {
-        window.Kakao.init('YOUR_KAKAO_JAVASCRIPT_KEY');
+        window.Kakao.init('7ac1d102657817d589cae9f0e3f22c30');
       }
     };
 
@@ -295,30 +295,26 @@ const App = () => {
     });
     
     const prompt = `
-      You are an expert hospital scheduler. Your task is to complete a weekly work schedule by assigning only the staff members. The directors have already been manually assigned.
+      You are an expert hospital scheduler. Your task is to complete a weekly work schedule by assigning only the staff members based on the pre-assigned directors.
       Your output MUST be only the JSON object, without any additional text or explanations.
 
       1. Personnel Information:
+      - All Staff: ${staff.map(s => s.name).join(', ')}
+      - New Staff (must be paired): ${staff.filter(s => s.isNew).map(s => s.name).join(', ')}
       - Existing Staff: ${staff.filter(s => !s.isNew).map(s => s.name).join(', ')}
-      - New Staff: ${staff.filter(s => s.isNew).map(s => s.name).join(', ')}
 
-      2. Current Schedule State (Directors are pre-assigned, some staff might be OFF):
+      2. Current Schedule (Directors are pre-assigned):
       ${JSON.stringify(scheduleToProcess, null, 2)}
 
-      3. Dates for this week:
-      ${weekDays.map(d => `- ${d.date}${d.isHoliday ? ` (${d.holidayName}, Holiday)` : ''}`).join('\n')}
-
-      4. Scheduling Rules for STAFF ONLY:
-      - Your goal is to assign staff to work with the pre-assigned directors. DO NOT change the director assignments.
-      - IMPORTANT: If a director is "진료없음", you MUST NOT assign any staff to that slot. The staff array for that slot must be empty.
-      - Distribute staff assignments as fairly and evenly as possible among all other directors throughout the week.
-      - In rooms marked 'New staff pairing allowed' (${rooms.filter(r => r.allowNewStaffPairing).map(r=>r.name).join(', ')}), you MUST pair one new staff member with one existing staff member in each AM/PM slot.
-      - New staff cannot work alone.
-      - A staff member cannot be in multiple places at once on the same day.
-      - Do not assign any staff to work on holidays.
-      - Staff listed in 'OFF' for a specific day must NOT be assigned any other work on that day. For example: ${JSON.stringify(offStaffByDay)}
-      - Fill in the staff for 'Injection' and 'Surgery' rooms as well, following the same fairness and pairing rules where applicable.
-      - The final output must be a complete JSON object for the entire week's schedule.
+      3. Rules for Assigning Staff:
+      - RULE 1: For each time slot (morning/afternoon) in rooms with directors, assign EXACTLY ONE staff member.
+      - RULE 2: If a director is "진료없음", you MUST NOT assign any staff. The "staff" array must be empty.
+      - RULE 3: For rooms with "allowNewStaffPairing: true" (${rooms.filter(r => r.allowNewStaffPairing).map(r=>r.name).join(', ')}), if you assign a New Staff, you MUST also assign one Existing Staff with them.
+      - RULE 4: A staff member can only be in one place at a time on any given day.
+      - RULE 5: Staff listed in 'OFF' for a specific day must NOT be assigned any other work on that day.
+      - RULE 6: DO NOT assign any staff to the '수술' (Surgery) room. Leave it as it is in the provided schedule.
+      - RULE 7: Distribute assignments fairly among all staff.
+      - RULE 8: The final JSON output must include the original directors and the staff you assigned.
     `;
     
     try {
@@ -348,9 +344,31 @@ const App = () => {
             throw new Error("Invalid API response structure.");
         }
 
-        const generatedJsonText = result.candidates[0].content.parts[0].text;
-        const generatedSchedule = JSON.parse(generatedJsonText);
+        let generatedSchedule = JSON.parse(result.candidates[0].content.parts[0].text);
         
+        // Post-processing to assign unassigned staff to '주사'
+        const allStaffIds = new Set(staff.map(s => s.id));
+        weekDays.forEach(day => {
+            if (day.isHoliday) return;
+
+            const assignedStaffIdsThisDay = new Set();
+            Object.values(generatedSchedule[day.date] || {}).forEach(roomData => {
+                if (roomData.morning && roomData.morning.staff) roomData.morning.staff.forEach(s => assignedStaffIdsThisDay.add(s.id));
+                if (roomData.afternoon && roomData.afternoon.staff) roomData.afternoon.staff.forEach(s => assignedStaffIdsThisDay.add(s.id));
+                if (roomData.people) roomData.people.forEach(p => assignedStaffIdsThisDay.add(p.id));
+            });
+
+            const unassignedStaffIds = [...allStaffIds].filter(id => !assignedStaffIdsThisDay.has(id));
+            const injectionRoom = rooms.find(r => r.name === '주사');
+            if (injectionRoom && unassignedStaffIds.length > 0) {
+                if (!generatedSchedule[day.date]) generatedSchedule[day.date] = {};
+                if (!generatedSchedule[day.date][injectionRoom.name]) generatedSchedule[day.date][injectionRoom.name] = { people: [] };
+                
+                const unassignedStaffObjects = staff.filter(s => unassignedStaffIds.includes(s.id));
+                generatedSchedule[day.date][injectionRoom.name].people.push(...unassignedStaffObjects);
+            }
+        });
+
         setScheduleData(prev => ({ ...prev, [scheduleKey]: generatedSchedule }));
         showNotification('✅ AI 스케줄이 성공적으로 생성되었습니다!');
 
@@ -423,11 +441,12 @@ const App = () => {
     const account = accounts.find(acc => acc.email === loginForm.email && acc.password === loginForm.password);
     if (account) {
       if (account.email === 'admin@hospital.com') {
+        const surnames = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임'];
         const adminDirectors = [
           { id: 'dir_none', abbrev: '無', name: '진료없음', isFixed: true },
-          ...Array.from({ length: 10 }, (_, i) => ({ id: `dir${i+1}`, abbrev: `원장${i+1}`, name: `원장 ${i+1}` }))
+          ...surnames.map((surname, i) => ({ id: `dir${i+1}`, abbrev: surname, name: `${surname}원장` }))
         ];
-        const adminStaff = Array.from({ length: 10 }, (_, i) => ({ id: `staff${i+1}`, name: `직원 ${i+1}`, isNew: i % 3 === 0 }));
+        const adminStaff = surnames.map((surname, i) => ({ id: `staff${i+1}`, name: `${surname}직원`, isNew: i % 3 === 0 }));
         setDirectors(adminDirectors);
         setStaff(adminStaff);
       } else {
@@ -514,9 +533,23 @@ const App = () => {
     if (!element || !window.html2canvas) { showNotification('이미지 렌더링 라이브러리를 로드하지 못했습니다.'); return; }
     window.html2canvas(element).then(canvas => {
         const printWindow = window.open('', '_blank');
-        printWindow.document.write('<html><head><title>인쇄</title><style>@media print { body { margin: 0; } img { max-width: 100%; height: auto; } }</style></head><body>');
-        printWindow.document.write(`<img src="${canvas.toDataURL()}">`);
-        printWindow.document.write('</body></html>');
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>인쇄</title>
+              <style>
+                @media print {
+                  @page { size: A4; margin: 20mm; }
+                  body { margin: 0; }
+                  img { width: 100%; height: auto; display: block; }
+                }
+              </style>
+            </head>
+            <body>
+              <img src="${canvas.toDataURL('image/png', 1.0)}">
+            </body>
+          </html>
+        `);
         printWindow.document.close();
         printWindow.focus();
         setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
@@ -541,8 +574,12 @@ const App = () => {
     const element = document.getElementById('schedule-table-to-print');
     if (!element || !window.html2canvas) { showNotification('이미지 렌더링 라이브러리를 로드하지 못했습니다.'); return; }
     showNotification('공유 이미지를 생성 중입니다...');
-    window.html2canvas(element).then(canvas => {
+    window.html2canvas(element, { scale: 2 }).then(canvas => {
         canvas.toBlob(blob => {
+            if (!blob) {
+              showNotification('이미지 생성에 실패했습니다.');
+              return;
+            }
             window.Kakao.Share.uploadImage({ file: [blob] })
             .then(response => {
                 window.Kakao.Share.sendDefault({
@@ -556,7 +593,7 @@ const App = () => {
                 });
             }).catch(error => {
                 console.error('Kakao image upload error:', error);
-                showNotification('카카오 이미지 업로드에 실패했습니다.');
+                showNotification(`카카오 이미지 업로드에 실패했습니다: ${JSON.stringify(error)}`);
             });
         }, 'image/png');
     });
@@ -592,7 +629,7 @@ const App = () => {
     });
   };
 
-  const handleDrop = (e, day, room, timeSlot) => {
+  const handleDrop = (e, day, roomName, timeSlot) => {
     e.preventDefault();
     setDragOverTarget(null);
     if (!draggedItem) return;
@@ -607,9 +644,9 @@ const App = () => {
     const daySchedule = scheduleData[scheduleKey]?.[day] || {};
 
     if (draggedItem.abbrev) {
-        for (const roomName in daySchedule) {
-            if (roomName === room) continue;
-            const roomData = daySchedule[roomName];
+        for (const rName in daySchedule) {
+            if (rName === roomName) continue;
+            const roomData = daySchedule[rName];
             if ((roomData.morning?.director?.id === draggedItem.id || roomData.afternoon?.director?.id === draggedItem.id) && draggedFromSchedule?.day !== day) {
                 showNotification(`${draggedItem.name}은(는) 이미 다른 진료실에 배정되었습니다.`);
                 return;
@@ -618,7 +655,12 @@ const App = () => {
     }
 
     if (draggedFromSchedule) {
-        removePersonFromSchedule(draggedFromSchedule.day, draggedFromSchedule.room, draggedFromSchedule.timeSlot, draggedItem.id);
+      if (draggedFromSchedule.timeSlot) { // Was in AM/PM slot
+        removePersonFromSchedule(draggedFromSchedule.day, draggedFromSchedule.room, 'morning', draggedItem.id);
+        removePersonFromSchedule(draggedFromSchedule.day, draggedFromSchedule.room, 'afternoon', draggedItem.id);
+      } else { // Was in single slot
+        removePersonFromSchedule(draggedFromSchedule.day, draggedFromSchedule.room, null, draggedItem.id);
+      }
     }
     
     setScheduleData(prev => {
@@ -627,9 +669,9 @@ const App = () => {
         if (!newData[scheduleKey][day]) newData[scheduleKey][day] = {};
         
         const updateSlot = (targetTimeSlot) => {
-            if (!newData[scheduleKey][day][room]) newData[scheduleKey][day][room] = { morning: { director: null, staff: [] }, afternoon: { director: null, staff: [] } };
-            if (!newData[scheduleKey][day][room][targetTimeSlot]) newData[scheduleKey][day][room][targetTimeSlot] = { director: null, staff: [] };
-            const roomData = newData[scheduleKey][day][room];
+            if (!newData[scheduleKey][day][roomName]) newData[scheduleKey][day][roomName] = { morning: { director: null, staff: [] }, afternoon: { director: null, staff: [] } };
+            if (!newData[scheduleKey][day][roomName][targetTimeSlot]) newData[scheduleKey][day][roomName][targetTimeSlot] = { director: null, staff: [] };
+            const roomData = newData[scheduleKey][day][roomName];
             if (draggedItem.abbrev) {
                 roomData[targetTimeSlot].director = draggedItem;
             } else {
@@ -640,15 +682,16 @@ const App = () => {
             }
         };
 
-        if (draggedItem.abbrev && timeSlot) { // 원장을 오전/오후 슬롯에 드롭 시
+        const targetRoom = rooms.find(r => r.name === roomName);
+        if (draggedItem.abbrev && targetRoom?.hasTimeSlots) {
             updateSlot('morning');
             updateSlot('afternoon');
-        } else if (timeSlot) { // 직원을 슬롯에 드롭 시
+        } else if (timeSlot) {
             updateSlot(timeSlot);
-        } else { // 단일 슬롯 룸에 드롭 시
-            if (!newData[scheduleKey][day][room]) newData[scheduleKey][day][room] = { people: [] };
-            if (!newData[scheduleKey][day][room].people.some(p => p.id === draggedItem.id)) {
-                newData[scheduleKey][day][room].people.push(draggedItem);
+        } else {
+            if (!newData[scheduleKey][day][roomName]) newData[scheduleKey][day][roomName] = { people: [] };
+            if (!newData[scheduleKey][day][roomName].people.some(p => p.id === draggedItem.id)) {
+                newData[scheduleKey][day][roomName].people.push(draggedItem);
             }
         }
         return newData;
@@ -657,11 +700,16 @@ const App = () => {
     setDraggedItem(null);
     setDraggedFromSchedule(null);
   };
-
+  
   const handleSidebarDrop = (e) => {
       e.preventDefault();
       if (draggedFromSchedule) {
-          removePersonFromSchedule(draggedFromSchedule.day, draggedFromSchedule.room, draggedFromSchedule.timeSlot, draggedItem.id);
+          if (draggedFromSchedule.timeSlot) { // Was in AM/PM slot
+            removePersonFromSchedule(draggedFromSchedule.day, draggedFromSchedule.room, 'morning', draggedItem.id);
+            removePersonFromSchedule(draggedFromSchedule.day, draggedFromSchedule.room, 'afternoon', draggedItem.id);
+          } else { // Was in single slot
+            removePersonFromSchedule(draggedFromSchedule.day, draggedFromSchedule.room, null, draggedItem.id);
+          }
       }
       setDraggedItem(null);
       setDraggedFromSchedule(null);
@@ -693,6 +741,14 @@ const App = () => {
         [newRooms[index], newRooms[targetIndex]] = [newRooms[targetIndex], newRooms[index]];
         return newRooms.map((room, i) => ({ ...room, order: i }));
     });
+  };
+
+  const toggleRoomPairing = (roomId) => {
+    setRooms(prevRooms => prevRooms.map(room => 
+      room.id === roomId 
+        ? { ...room, allowNewStaffPairing: !room.allowNewStaffPairing }
+        : room
+    ));
   };
 
   const Notification = () => notification && (
@@ -819,21 +875,27 @@ const App = () => {
             </div>
             {[...orderedRooms, rooms.find(r => r.name === 'OFF')].map(room => room && (
               <div key={room.id} className="grid grid-cols-8 border-t">
-                <div className="bg-gray-600 text-white p-3 text-center font-bold border-r">{room.name}</div>
+                <button 
+                  onClick={() => toggleRoomPairing(room.id)}
+                  disabled={!room.hasTimeSlots && room.name !== '주사'}
+                  className="bg-gray-600 text-white p-3 text-center font-bold border-r flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {room.name}
+                  {(room.hasTimeSlots || room.name === '주사') && <Users size={16} className={room.allowNewStaffPairing ? 'text-blue-300' : 'text-gray-400'} />}
+                </button>
                 {weekDays.map((day, i) => {
                   const daySchedule = currentWeekData[day.date]?.[room.name];
                   const isEditable = isEditableDay(day.actualDate);
                   if (day.isHoliday) return <div key={i} className="bg-red-100 flex items-center justify-center text-red-700 text-sm font-semibold border-r">{day.holidayName || '공휴일'}</div>;
                   
                   if (!room.hasTimeSlots) {
-                      const isHighlighted = dragOverTarget?.day === day.date && dragOverTarget?.room === room.name;
                       return (
                           <div key={i} onDragOver={isEditable ? (e) => handleDragOverWithHighlight(e, day.date, room.name, null) : null} onDragLeave={handleDragLeave} onDrop={isEditable ? (e) => handleDrop(e, day.date, room.name, null) : null}
-                              className={`p-2 border-r min-h-[60px] space-y-1 ${isEditable ? 'hover:bg-gray-100' : 'bg-gray-50'} ${isHighlighted ? 'ring-2 ring-blue-500' : ''}`}>
+                              className={`p-2 border-r min-h-[60px] space-y-1 ${isEditable ? 'hover:bg-gray-100' : 'bg-gray-50'} ${dragOverTarget?.day === day.date && dragOverTarget?.room === room.name ? 'ring-2 ring-blue-500' : ''}`}>
                               {(daySchedule?.people || []).map(p => (
                                   <div key={p.id} draggable={isEditable} onDragStart={isEditable ? (e) => handleDragStart(e, p, { day: day.date, room: room.name, timeSlot: null }) : null}
                                       className={`relative group text-xs p-1 rounded-md text-center ${p.abbrev ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'} ${isEditable ? 'cursor-move' : ''}`}>
-                                      {p.abbrev || p.name}
+                                      {p.name}
                                       {isEditable && <button onClick={() => removePersonFromSchedule(day.date, room.name, null, p.id)} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs">x</button>}
                                   </div>
                               ))}
