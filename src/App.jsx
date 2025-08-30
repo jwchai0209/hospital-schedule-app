@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, X, Settings, GripVertical, Edit3, Upload, Printer, LogOut, User, Mail, Lock, Eye, EyeOff, Sparkles, AlertTriangle } from 'lucide-react';
 
+const APP_VERSION = "v1.1.0";
+const BUILD_DATE = "2025-08-30";
+
 // --- 로그인/회원가입 컴포넌트 분리 ---
 
 const LoginPage = ({ loginForm, setLoginForm, handleLogin, setCurrentView, showPassword, setShowPassword }) => {
@@ -39,6 +42,9 @@ const LoginPage = ({ loginForm, setLoginForm, handleLogin, setCurrentView, showP
                     <div className="mt-4 p-2 bg-gray-100 rounded-md text-xs text-gray-600">
                         테스트 계정: admin@hospital.com / admin123
                     </div>
+                </div>
+                <div className="mt-6 text-center text-xs text-gray-400">
+                    <p>{APP_VERSION} ({BUILD_DATE})</p>
                 </div>
             </div>
         </div>
@@ -108,20 +114,23 @@ const App = () => {
   const [hospitalInfo, setHospitalInfo] = useState({ name: '우리 병원', icon: null });
   const [tempHospitalName, setTempHospitalName] = useState('');
 
-  const [directors, setDirectors] = useState([
+  const defaultDirectors = [
+    { id: 'dir_none', abbrev: '無', name: '진료없음', isFixed: true },
     { id: 'dir1', abbrev: '김', name: '김원장' },
     { id: 'dir2', abbrev: '이', name: '이원장' },
     { id: 'dir3', abbrev: '박', name: '박원장' },
-    { id: 'dir_none', abbrev: '無', name: '진료없음', isFixed: true },
-  ]);
+  ];
 
-  const [staff, setStaff] = useState([
+  const defaultStaff = [
     { id: 'staff1', name: '천직원', isNew: false },
     { id: 'staff2', name: '방직원', isNew: false },
     { id: 'staff3', name: '지직원', isNew: true },
     { id: 'staff4', name: '황직원', isNew: false },
     { id: 'staff5', name: '강직원', isNew: true },
-  ]);
+  ];
+
+  const [directors, setDirectors] = useState(defaultDirectors);
+  const [staff, setStaff] = useState(defaultStaff);
 
   const [rooms, setRooms] = useState([
     { id: 'room1', name: '1진료실', hasTimeSlots: true, order: 1, allowNewStaffPairing: true },
@@ -287,6 +296,7 @@ const App = () => {
     
     const prompt = `
       You are an expert hospital scheduler. Your task is to complete a weekly work schedule by assigning only the staff members. The directors have already been manually assigned.
+      Your output MUST be only the JSON object, without any additional text or explanations.
 
       1. Personnel Information:
       - Existing Staff: ${staff.filter(s => !s.isNew).map(s => s.name).join(', ')}
@@ -300,7 +310,7 @@ const App = () => {
 
       4. Scheduling Rules for STAFF ONLY:
       - Your goal is to assign staff to work with the pre-assigned directors. DO NOT change the director assignments.
-      - IMPORTANT: If a director is "진료없음", you MUST NOT assign any staff to that slot.
+      - IMPORTANT: If a director is "진료없음", you MUST NOT assign any staff to that slot. The staff array for that slot must be empty.
       - Distribute staff assignments as fairly and evenly as possible among all other directors throughout the week.
       - In rooms marked 'New staff pairing allowed' (${rooms.filter(r => r.allowNewStaffPairing).map(r=>r.name).join(', ')}), you MUST pair one new staff member with one existing staff member in each AM/PM slot.
       - New staff cannot work alone.
@@ -308,24 +318,8 @@ const App = () => {
       - Do not assign any staff to work on holidays.
       - Staff listed in 'OFF' for a specific day must NOT be assigned any other work on that day. For example: ${JSON.stringify(offStaffByDay)}
       - Fill in the staff for 'Injection' and 'Surgery' rooms as well, following the same fairness and pairing rules where applicable.
-      - The final output must be a complete JSON object for the entire week's schedule, including the pre-assigned directors and the staff you assign. Strictly follow the provided JSON schema. Do not add any other text or explanations.
+      - The final output must be a complete JSON object for the entire week's schedule.
     `;
-
-    const personSchema = { type: "OBJECT", properties: { id: { type: "STRING" }, name: { type: "STRING" }, abbrev: { type: "STRING", nullable: true }, isNew: { type: "BOOLEAN", nullable: true }, }, nullable: true, };
-    const timeSlotSchema = { type: "OBJECT", properties: { director: personSchema, staff: { type: "ARRAY", items: personSchema }, }, };
-    const roomProperties = {};
-    weekDays.forEach(day => {
-        const dayProperties = {};
-        rooms.forEach(room => {
-            if (room.hasTimeSlots) {
-                dayProperties[room.name] = { type: "OBJECT", properties: { morning: timeSlotSchema, afternoon: timeSlotSchema, }, };
-            } else {
-                dayProperties[room.name] = { type: "OBJECT", properties: { people: { type: "ARRAY", items: personSchema, }, }, };
-            }
-        });
-        roomProperties[day.date] = { type: "OBJECT", properties: dayProperties, };
-    });
-    const schema = { type: "OBJECT", properties: roomProperties, };
     
     try {
         const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -333,7 +327,7 @@ const App = () => {
 
         const payload = {
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json", responseSchema: schema, },
+          generationConfig: { responseMimeType: "application/json" },
         };
 
         const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -407,8 +401,8 @@ const App = () => {
         rooms.forEach(room => {
             if (room.hasTimeSlots) {
                 if (!newSchedule[day.date][room.name]) newSchedule[day.date][room.name] = {};
-                if (!newSchedule[day.date][room.name].morning) newSchedule[day.date][room.name].morning = {};
-                if (!newSchedule[day.date][room.name].afternoon) newSchedule[day.date][room.name].afternoon = {};
+                if (!newSchedule[day.date][room.name].morning) newSchedule[day.date][room.name].morning = { director: null, staff: [] };
+                if (!newSchedule[day.date][room.name].afternoon) newSchedule[day.date][room.name].afternoon = { director: null, staff: [] };
 
                 if (!newSchedule[day.date][room.name].morning.director) {
                     newSchedule[day.date][room.name].morning.director = noTreatmentDirector;
@@ -428,6 +422,18 @@ const App = () => {
   const handleLogin = () => {
     const account = accounts.find(acc => acc.email === loginForm.email && acc.password === loginForm.password);
     if (account) {
+      if (account.email === 'admin@hospital.com') {
+        const adminDirectors = [
+          { id: 'dir_none', abbrev: '無', name: '진료없음', isFixed: true },
+          ...Array.from({ length: 10 }, (_, i) => ({ id: `dir${i+1}`, abbrev: `원장${i+1}`, name: `원장 ${i+1}` }))
+        ];
+        const adminStaff = Array.from({ length: 10 }, (_, i) => ({ id: `staff${i+1}`, name: `직원 ${i+1}`, isNew: i % 3 === 0 }));
+        setDirectors(adminDirectors);
+        setStaff(adminStaff);
+      } else {
+        setDirectors(defaultDirectors);
+        setStaff(defaultStaff);
+      }
       showNotification('로그인 성공!');
       setCurrentUser(account);
       setHospitalInfo(prev => ({ ...prev, name: account.hospitalName }));
@@ -439,12 +445,8 @@ const App = () => {
   };
 
   const handleRegister = () => {
-    if (registerForm.password !== registerForm.confirmPassword) {
-      showNotification('비밀번호가 일치하지 않습니다.'); return;
-    }
-    if (accounts.some(acc => acc.email === registerForm.email)) {
-      showNotification('이미 존재하는 이메일입니다.'); return;
-    }
+    if (registerForm.password !== registerForm.confirmPassword) { showNotification('비밀번호가 일치하지 않습니다.'); return; }
+    if (accounts.some(acc => acc.email === registerForm.email)) { showNotification('이미 존재하는 이메일입니다.'); return; }
     const newAccount = { ...registerForm };
     setAccounts(prev => [...prev, newAccount]);
     setCurrentUser(newAccount);
@@ -590,7 +592,7 @@ const App = () => {
     });
   };
 
-  const handleDrop = (e, day, room, timeSlot, isFullDayDrop = false) => {
+  const handleDrop = (e, day, room, timeSlot) => {
     e.preventDefault();
     setDragOverTarget(null);
     if (!draggedItem) return;
@@ -608,7 +610,7 @@ const App = () => {
         for (const roomName in daySchedule) {
             if (roomName === room) continue;
             const roomData = daySchedule[roomName];
-            if (roomData.morning?.director?.id === draggedItem.id || roomData.afternoon?.director?.id === draggedItem.id) {
+            if ((roomData.morning?.director?.id === draggedItem.id || roomData.afternoon?.director?.id === draggedItem.id) && draggedFromSchedule?.day !== day) {
                 showNotification(`${draggedItem.name}은(는) 이미 다른 진료실에 배정되었습니다.`);
                 return;
             }
@@ -638,12 +640,12 @@ const App = () => {
             }
         };
 
-        if (isFullDayDrop && draggedItem.abbrev) {
+        if (draggedItem.abbrev && timeSlot) { // 원장을 오전/오후 슬롯에 드롭 시
             updateSlot('morning');
             updateSlot('afternoon');
-        } else if (timeSlot) {
+        } else if (timeSlot) { // 직원을 슬롯에 드롭 시
             updateSlot(timeSlot);
-        } else {
+        } else { // 단일 슬롯 룸에 드롭 시
             if (!newData[scheduleKey][day][room]) newData[scheduleKey][day][room] = { people: [] };
             if (!newData[scheduleKey][day][room].people.some(p => p.id === draggedItem.id)) {
                 newData[scheduleKey][day][room].people.push(draggedItem);
@@ -840,7 +842,7 @@ const App = () => {
                   }
 
                   return (
-                    <div key={i} className="p-2 border-r space-y-2 min-h-[60px]" onDragOver={isEditable ? (e) => handleDragOver(e) : null} onDrop={isEditable ? (e) => handleDrop(e, day.date, room.name, null, true) : null}>
+                    <div key={i} className="p-2 border-r space-y-2 min-h-[60px]">
                       {['morning', 'afternoon'].map(timeSlot => {
                           const slotData = daySchedule?.[timeSlot];
                           const isHighlighted = dragOverTarget?.day === day.date && dragOverTarget?.room === room.name && dragOverTarget?.timeSlot === timeSlot;
