@@ -3,7 +3,6 @@ import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, X, Settings, G
 
 // --- 로그인/회원가입 컴포넌트 분리 ---
 
-// 로그인 페이지 컴포넌트
 const LoginPage = ({ loginForm, setLoginForm, handleLogin, setCurrentView, showPassword, setShowPassword }) => {
     const handleKeyPress = (e) => {
         if (e.key === 'Enter') {
@@ -46,7 +45,6 @@ const LoginPage = ({ loginForm, setLoginForm, handleLogin, setCurrentView, showP
     );
 };
 
-// 회원가입 페이지 컴포넌트
 const RegisterPage = ({ registerForm, setRegisterForm, handleRegister, setCurrentView }) => (
   <div className="min-h-screen bg-green-50 flex items-center justify-center p-4">
     <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md border">
@@ -76,29 +74,17 @@ const RegisterPage = ({ registerForm, setRegisterForm, handleRegister, setCurren
 const App = () => {
   // --- 상태 관리 (State Management) ---
 
-  // 인증 및 뷰 관련 상태
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentView, setCurrentView] = useState('login');
   const [showPassword, setShowPassword] = useState(false);
   const [notification, setNotification] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
 
-  // 폼 데이터 상태
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    hospitalName: ''
-  });
+  const [registerForm, setRegisterForm] = useState({ name: '', email: '', password: '', confirmPassword: '', hospitalName: '' });
 
-  // 사용자 계정 데이터 (실제 앱에서는 백엔드에서 관리)
-  const [accounts, setAccounts] = useState([
-    { email: 'admin@hospital.com', password: 'admin123', name: '관리자', hospitalName: '샘플 병원' }
-  ]);
+  const [accounts, setAccounts] = useState([{ email: 'admin@hospital.com', password: 'admin123', name: '관리자', hospitalName: '샘플 병원' }]);
 
-  // 스케줄 관련 상태
   const [selectedTab, setSelectedTab] = useState('원장');
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
@@ -106,32 +92,27 @@ const App = () => {
   const [scheduleData, setScheduleData] = useState({});
   const [holidayData, setHolidayData] = useState({});
 
-  // 모달 표시 상태
   const [showPersonnelModal, setShowPersonnelModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showHospitalNameModal, setShowHospitalNameModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [aiError, setAiError] = useState(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  // 드래그 앤 드롭 관련 상태
   const [draggedItem, setDraggedItem] = useState(null);
   const [draggedRoomId, setDraggedRoomId] = useState(null);
   const [dragOverTarget, setDragOverTarget] = useState(null);
   const [draggedFromSchedule, setDraggedFromSchedule] = useState(null);
   const fileInputRef = useRef(null);
 
-  // 병원 정보 상태
-  const [hospitalInfo, setHospitalInfo] = useState({
-    name: '우리 병원',
-    icon: null
-  });
+  const [hospitalInfo, setHospitalInfo] = useState({ name: '우리 병원', icon: null });
   const [tempHospitalName, setTempHospitalName] = useState('');
 
-  // 인원 및 진료실 데이터 상태
   const [directors, setDirectors] = useState([
     { id: 'dir1', abbrev: '김', name: '김원장' },
     { id: 'dir2', abbrev: '이', name: '이원장' },
     { id: 'dir3', abbrev: '박', name: '박원장' },
+    { id: 'dir_none', abbrev: '無', name: '진료없음', isFixed: true },
   ]);
 
   const [staff, setStaff] = useState([
@@ -150,7 +131,6 @@ const App = () => {
     { id: 'off', name: 'OFF', hasTimeSlots: false, order: 99, allowNewStaffPairing: false }
   ]);
 
-  // 새 인원/진료실 추가 폼 상태
   const [newPersonName, setNewPersonName] = useState('');
   const [newPersonAbbrev, setNewPersonAbbrev] = useState('');
   const [isNewStaff, setIsNewStaff] = useState(false);
@@ -158,73 +138,48 @@ const App = () => {
   const [newRoomHasTimeSlots, setNewRoomHasTimeSlots] = useState(true);
   const [newRoomAllowPairing, setNewRoomAllowPairing] = useState(false);
 
-  // Gemini API 관련 상태
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  // --- SDK 로딩 및 초기화 ---
   useEffect(() => {
-    // Kakao SDK 로드
     const kakaoScript = document.createElement('script');
     kakaoScript.src = 'https://developers.kakao.com/sdk/js/kakao.js';
     kakaoScript.async = true;
     document.head.appendChild(kakaoScript);
-
     kakaoScript.onload = () => {
       if (window.Kakao && !window.Kakao.isInitialized()) {
-        window.Kakao.init('YOUR_KAKAO_JAVASCRIPT_KEY'); // 여기에 실제 카카오 앱 JavaScript 키를 입력하세요.
+        window.Kakao.init('YOUR_KAKAO_JAVASCRIPT_KEY');
       }
     };
 
-    // html2canvas 로드
     const html2canvasScript = document.createElement('script');
     html2canvasScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
     html2canvasScript.async = true;
     document.head.appendChild(html2canvasScript);
-
   }, []);
-
-  // --- 공휴일 데이터 API 연동 ---
   
   const API_KEY = 'YOUR_PUBLIC_DATA_API_KEY'; 
   const API_URL = 'https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getHoliDeInfo';
 
   const fetchHolidayData = async (year, month) => {
     if (API_KEY === 'YOUR_PUBLIC_DATA_API_KEY') {
-      console.warn("공공데이터 API 키가 설정되지 않았습니다. 기본 공휴일 데이터를 사용합니다.");
-      const defaultHolidays = {
-        [`${year}-${month}`]: getDefaultHolidays(year, month)
-      };
+      const defaultHolidays = { [`${year}-${month}`]: getDefaultHolidays(year, month) };
       setHolidayData(prev => ({ ...prev, ...defaultHolidays }));
       return;
     }
-
     try {
       const formattedMonth = month.toString().padStart(2, '0');
       const url = `${API_URL}?solYear=${year}&solMonth=${formattedMonth}&ServiceKey=${encodeURIComponent(API_KEY)}&_type=json&numOfRows=100`;
-      
       const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
+      if (!response.ok) throw new Error('Network response was not ok');
       const data = await response.json();
-      
       if (data.response?.header?.resultCode === '00' && data.response?.body?.items?.item) {
         const holidays = {};
-        const items = Array.isArray(data.response.body.items.item) 
-          ? data.response.body.items.item 
-          : [data.response.body.items.item];
-        
+        const items = Array.isArray(data.response.body.items.item) ? data.response.body.items.item : [data.response.body.items.item];
         items.forEach(item => {
           const key = `${year}-${month}`;
           if (!holidays[key]) holidays[key] = {};
-          
-          const date = item.locdate.toString();
-          const day = parseInt(date.substring(6, 8));
-          
-          holidays[key][day] = {
-            name: item.dateName,
-            isHoliday: item.isHoliday === 'Y'
-          };
+          const day = parseInt(item.locdate.toString().substring(6, 8));
+          holidays[key][day] = { name: item.dateName, isHoliday: item.isHoliday === 'Y' };
         });
         setHolidayData(prev => ({ ...prev, ...holidays }));
       } else {
@@ -232,74 +187,40 @@ const App = () => {
       }
     } catch (error) {
       console.error('공휴일 데이터 가져오기 실패:', error);
-      const defaultHolidays = {
-        [`${year}-${month}`]: getDefaultHolidays(year, month)
-      };
+      const defaultHolidays = { [`${year}-${month}`]: getDefaultHolidays(year, month) };
       setHolidayData(prev => ({ ...prev, ...defaultHolidays }));
     }
   };
 
   const getDefaultHolidays = (year, month) => {
     const holidays = {};
-    if (year === 2025) { // 2025년 기준 예시 데이터
+    if (year === 2025) {
       switch (month) {
-        case 1:
-          holidays[1] = { name: '신정', isHoliday: true };
-          holidays[28] = { name: '설날 연휴', isHoliday: true };
-          holidays[29] = { name: '설날', isHoliday: true };
-          holidays[30] = { name: '설날 연휴', isHoliday: true };
-          break;
-        case 3:
-          holidays[1] = { name: '삼일절', isHoliday: true };
-          break;
-        case 5:
-          holidays[5] = { name: '어린이날', isHoliday: true };
-          holidays[6] = { name: '부처님오신날', isHoliday: true };
-          break;
-        case 6:
-          holidays[6] = { name: '현충일', isHoliday: true };
-          break;
-        case 8:
-          holidays[15] = { name: '광복절', isHoliday: true };
-          break;
-        case 10:
-          holidays[3] = { name: '개천절', isHoliday: true };
-          holidays[6] = { name: '추석', isHoliday: true };
-          holidays[7] = { name: '추석 연휴', isHoliday: true };
-          holidays[8] = { name: '추석 연휴', isHoliday: true };
-          holidays[9] = { name: '한글날', isHoliday: true };
-          break;
-        case 12:
-          holidays[25] = { name: '기독탄신일', isHoliday: true };
-          break;
+        case 1: holidays[1] = { name: '신정', isHoliday: true }; holidays[28] = { name: '설날 연휴', isHoliday: true }; holidays[29] = { name: '설날', isHoliday: true }; holidays[30] = { name: '설날 연휴', isHoliday: true }; break;
+        case 3: holidays[1] = { name: '삼일절', isHoliday: true }; break;
+        case 5: holidays[5] = { name: '어린이날', isHoliday: true }; holidays[6] = { name: '부처님오신날', isHoliday: true }; break;
+        case 6: holidays[6] = { name: '현충일', isHoliday: true }; break;
+        case 8: holidays[15] = { name: '광복절', isHoliday: true }; break;
+        case 10: holidays[3] = { name: '개천절', isHoliday: true }; holidays[6] = { name: '추석', isHoliday: true }; holidays[7] = { name: '추석 연휴', isHoliday: true }; holidays[8] = { name: '추석 연휴', isHoliday: true }; holidays[9] = { name: '한글날', isHoliday: true }; break;
+        case 12: holidays[25] = { name: '기독탄신일', isHoliday: true }; break;
         default: break;
       }
     }
     return holidays;
   };
   
-  // --- useEffect Hooks ---
-
   useEffect(() => {
-    fetchHolidayData(currentYear, currentMonth);
     if (isAuthenticated) {
       const today = new Date();
-      const todayYear = today.getFullYear();
-      const todayMonth = today.getMonth() + 1;
-      const todayWeek = getTodayWeek(today);
-      
-      setCurrentYear(todayYear);
-      setCurrentMonth(todayMonth);
-      setCurrentWeek(todayWeek);
+      setCurrentYear(today.getFullYear());
+      setCurrentMonth(today.getMonth() + 1);
+      setCurrentWeek(getTodayWeek(today));
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
     fetchHolidayData(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
-
-
-  // --- 유틸리티 및 헬퍼 함수 ---
 
   const getTodayWeek = (date) => {
     const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
@@ -324,19 +245,15 @@ const App = () => {
     const dayOfWeek = firstDayOfMonth.getDay();
     const offset = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
     const startDate = new Date(year, month - 1, 1 + offset + (week - 1) * 7);
-    
     const days = [];
     for (let i = 0; i < 7; i++) {
         const currentDate = new Date(startDate);
         currentDate.setDate(startDate.getDate() + i);
-        
         const actualYear = currentDate.getFullYear();
         const actualMonth = currentDate.getMonth() + 1;
         const actualDay = currentDate.getDate();
-        
         const holidayKey = `${actualYear}-${actualMonth}`;
         const holidayInfo = holidayData[holidayKey]?.[actualDay];
-        
         days.push({
             date: `${actualMonth}월 ${actualDay}일(${['일', '월', '화', '수', '목', '금', '토'][currentDate.getDay()]})`,
             color: holidayInfo?.isHoliday ? 'bg-orange-50' : 'bg-blue-50',
@@ -348,21 +265,114 @@ const App = () => {
     return days;
   };
 
-  const getWeekLabel = (year, month, week) => {
-    return `${year}년 ${month}월 ${week}주차`;
-  };
+  const getWeekLabel = (year, month, week) => `${year}년 ${month}월 ${week}주차`;
   
-  const sortKorean = (items, key = 'name') => {
-    return [...items].sort((a, b) => a[key].localeCompare(b[key], 'ko'));
-  };
+  const sortKorean = (items, key = 'name') => [...items].sort((a, b) => a[key].localeCompare(b[key], 'ko'));
 
-  // --- Gemini API 호출 함수 (수정됨) ---
-  const generateScheduleWithAI = async () => {
+  const runAiGeneration = async (scheduleToProcess) => {
+    setIsAiLoading(true);
+    showNotification('✨ AI가 스케줄을 생성하고 있습니다...');
+
     const weekDays = getWeekDays(currentYear, currentMonth, currentWeek);
     const scheduleKey = `${currentYear}-${currentMonth}-${currentWeek}`;
-    const currentSchedule = scheduleData[scheduleKey] || {};
     
-    // 1. 모든 진료실에 원장이 배정되었는지 확인
+    const offStaffByDay = {};
+    weekDays.forEach(day => {
+      offStaffByDay[day.date] = [];
+      const offSchedule = scheduleToProcess[day.date]?.['OFF'];
+      if (offSchedule?.people) {
+        offSchedule.people.forEach(p => offStaffByDay[day.date].push(p.name));
+      }
+    });
+    
+    const prompt = `
+      You are an expert hospital scheduler. Your task is to complete a weekly work schedule by assigning only the staff members. The directors have already been manually assigned.
+
+      1. Personnel Information:
+      - Existing Staff: ${staff.filter(s => !s.isNew).map(s => s.name).join(', ')}
+      - New Staff: ${staff.filter(s => s.isNew).map(s => s.name).join(', ')}
+
+      2. Current Schedule State (Directors are pre-assigned, some staff might be OFF):
+      ${JSON.stringify(scheduleToProcess, null, 2)}
+
+      3. Dates for this week:
+      ${weekDays.map(d => `- ${d.date}${d.isHoliday ? ` (${d.holidayName}, Holiday)` : ''}`).join('\n')}
+
+      4. Scheduling Rules for STAFF ONLY:
+      - Your goal is to assign staff to work with the pre-assigned directors. DO NOT change the director assignments.
+      - IMPORTANT: If a director is "진료없음", you MUST NOT assign any staff to that slot.
+      - Distribute staff assignments as fairly and evenly as possible among all other directors throughout the week.
+      - In rooms marked 'New staff pairing allowed' (${rooms.filter(r => r.allowNewStaffPairing).map(r=>r.name).join(', ')}), you MUST pair one new staff member with one existing staff member in each AM/PM slot.
+      - New staff cannot work alone.
+      - A staff member cannot be in multiple places at once on the same day.
+      - Do not assign any staff to work on holidays.
+      - Staff listed in 'OFF' for a specific day must NOT be assigned any other work on that day. For example: ${JSON.stringify(offStaffByDay)}
+      - Fill in the staff for 'Injection' and 'Surgery' rooms as well, following the same fairness and pairing rules where applicable.
+      - The final output must be a complete JSON object for the entire week's schedule, including the pre-assigned directors and the staff you assign. Strictly follow the provided JSON schema. Do not add any other text or explanations.
+    `;
+
+    const personSchema = { type: "OBJECT", properties: { id: { type: "STRING" }, name: { type: "STRING" }, abbrev: { type: "STRING", nullable: true }, isNew: { type: "BOOLEAN", nullable: true }, }, nullable: true, };
+    const timeSlotSchema = { type: "OBJECT", properties: { director: personSchema, staff: { type: "ARRAY", items: personSchema }, }, };
+    const roomProperties = {};
+    weekDays.forEach(day => {
+        const dayProperties = {};
+        rooms.forEach(room => {
+            if (room.hasTimeSlots) {
+                dayProperties[room.name] = { type: "OBJECT", properties: { morning: timeSlotSchema, afternoon: timeSlotSchema, }, };
+            } else {
+                dayProperties[room.name] = { type: "OBJECT", properties: { people: { type: "ARRAY", items: personSchema, }, }, };
+            }
+        });
+        roomProperties[day.date] = { type: "OBJECT", properties: dayProperties, };
+    });
+    const schema = { type: "OBJECT", properties: roomProperties, };
+    
+    try {
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+
+        const payload = {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json", responseSchema: schema, },
+        };
+
+        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+
+        if (!response.ok) {
+            let errorBodyText = await response.text();
+            let errorMessage = `API call failed with status: ${response.status}`;
+            try {
+                const errorBodyJson = JSON.parse(errorBodyText);
+                errorMessage = errorBodyJson?.error?.message || errorMessage;
+            } catch (parseError) { errorMessage = errorBodyText || errorMessage; }
+            throw new Error(errorMessage);
+        }
+
+        const result = await response.json();
+        
+        if (!result.candidates || !result.candidates[0].content?.parts?.[0]?.text) {
+            throw new Error("Invalid API response structure.");
+        }
+
+        const generatedJsonText = result.candidates[0].content.parts[0].text;
+        const generatedSchedule = JSON.parse(generatedJsonText);
+        
+        setScheduleData(prev => ({ ...prev, [scheduleKey]: generatedSchedule }));
+        showNotification('✅ AI 스케줄이 성공적으로 생성되었습니다!');
+
+    } catch (error) {
+        console.error("Gemini API Error:", error);
+        setAiError({ title: 'AI 스케줄 생성 실패', message: `오류가 발생했습니다: ${error.message}` });
+    } finally {
+        setIsAiLoading(false);
+    }
+  };
+
+  const handleGenerateClick = () => {
+    const scheduleKey = `${currentYear}-${currentMonth}-${currentWeek}`;
+    const currentSchedule = scheduleData[scheduleKey] || {};
+    const weekDays = getWeekDays(currentYear, currentMonth, currentWeek);
+    
     let isDirectorMissing = false;
     for (const day of weekDays) {
         if (day.isHoliday) continue;
@@ -378,169 +388,43 @@ const App = () => {
         if (isDirectorMissing) break;
     }
 
-    // 2. 원장이 비어있으면 팝업 표시 후 생성 중단
     if (isDirectorMissing) {
-        setAiError({ 
-            title: '원장 배치 필요', 
-            message: '모든 진료실의 오전/오후에 원장님을 먼저 배정해주세요. AI 스케줄 생성은 그 후에 가능합니다.' 
-        });
-        return;
-    }
-
-    setIsAiLoading(true);
-    showNotification('✨ AI가 스케줄을 생성하고 있습니다...');
-
-    // 3. AI에게 전달할 현재 스케줄 정보 구성
-    const offStaffByDay = {};
-    weekDays.forEach(day => {
-      offStaffByDay[day.date] = [];
-      const offSchedule = currentSchedule[day.date]?.['OFF'];
-      if (offSchedule?.people) {
-        offSchedule.people.forEach(p => offStaffByDay[day.date].push(p.name));
-      }
-    });
-    
-    const prompt = `
-      You are an expert hospital scheduler. Your task is to complete a weekly work schedule by assigning only the staff members. The directors have already been manually assigned.
-
-      1. Personnel Information:
-      - Existing Staff: ${staff.filter(s => !s.isNew).map(s => s.name).join(', ')}
-      - New Staff: ${staff.filter(s => s.isNew).map(s => s.name).join(', ')}
-
-      2. Current Schedule State (Directors are pre-assigned, some staff might be OFF):
-      ${JSON.stringify(currentSchedule, null, 2)}
-
-      3. Dates for this week:
-      ${weekDays.map(d => `- ${d.date}${d.isHoliday ? ` (${d.holidayName}, Holiday)` : ''}`).join('\n')}
-
-      4. Scheduling Rules for STAFF ONLY:
-      - Your goal is to assign staff to work with the pre-assigned directors. DO NOT change the director assignments.
-      - Distribute staff assignments as fairly and evenly as possible among all directors throughout the week.
-      - In rooms marked 'New staff pairing allowed' (${rooms.filter(r => r.allowNewStaffPairing).map(r=>r.name).join(', ')}), you MUST pair one new staff member with one existing staff member in each AM/PM slot.
-      - New staff cannot work alone.
-      - A staff member cannot be in multiple places at once on the same day.
-      - Do not assign any staff to work on holidays.
-      - Staff listed in 'OFF' for a specific day must NOT be assigned any other work on that day. For example: ${JSON.stringify(offStaffByDay)}
-      - Fill in the staff for 'Injection' and 'Surgery' rooms as well, following the same fairness and pairing rules where applicable.
-      - The final output must be a complete JSON object for the entire week's schedule, including the pre-assigned directors and the staff you assign. Strictly follow the provided JSON schema. Do not add any other text or explanations.
-    `;
-
-    const personSchema = {
-        type: "OBJECT",
-        properties: {
-            id: { type: "STRING" },
-            name: { type: "STRING" },
-            abbrev: { type: "STRING", nullable: true },
-            isNew: { type: "BOOLEAN", nullable: true },
-        },
-        nullable: true,
-    };
-
-    const timeSlotSchema = {
-      type: "OBJECT",
-      properties: {
-        director: personSchema,
-        staff: {
-            type: "ARRAY",
-            items: personSchema
-        },
-      },
-    };
-
-    const roomProperties = {};
-    weekDays.forEach(day => {
-        const dayProperties = {};
-        rooms.forEach(room => {
-            if (room.hasTimeSlots) {
-                dayProperties[room.name] = {
-                    type: "OBJECT",
-                    properties: {
-                        morning: timeSlotSchema,
-                        afternoon: timeSlotSchema,
-                    },
-                };
-            } else {
-                dayProperties[room.name] = {
-                    type: "OBJECT",
-                    properties: {
-                        people: {
-                            type: "ARRAY",
-                            items: personSchema,
-                        },
-                    },
-                };
-            }
-        });
-        roomProperties[day.date] = {
-            type: "OBJECT",
-            properties: dayProperties,
-        };
-    });
-
-    const schema = {
-      type: "OBJECT",
-      properties: roomProperties,
-    };
-    
-    try {
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-preview-0514:generateContent?key=${apiKey}`;
-
-        const payload = {
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: schema,
-          },
-        };
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            let errorBodyText = await response.text();
-            console.error("API Error Body:", errorBodyText);
-            let errorMessage = `API call failed with status: ${response.status}`;
-            try {
-                const errorBodyJson = JSON.parse(errorBodyText);
-                errorMessage = errorBodyJson?.error?.message || errorMessage;
-            } catch (parseError) {
-                if (errorBodyText) {
-                    errorMessage = errorBodyText;
-                }
-            }
-            throw new Error(errorMessage);
-        }
-
-        const result = await response.json();
-        
-        if (!result.candidates || !result.candidates[0].content?.parts?.[0]?.text) {
-            throw new Error("Invalid API response structure. The model may have failed to generate a valid schedule.");
-        }
-
-        const generatedJsonText = result.candidates[0].content.parts[0].text;
-        const generatedSchedule = JSON.parse(generatedJsonText);
-        
-        setScheduleData(prev => ({
-            ...prev,
-            [scheduleKey]: generatedSchedule
-        }));
-
-        showNotification('✅ AI 스케줄이 성공적으로 생성되었습니다!');
-
-    } catch (error) {
-        console.error("Gemini API Error:", error);
-        setAiError({ title: 'AI 스케줄 생성 실패', message: `오류가 발생했습니다: ${error.message}` });
-    } finally {
-        setIsAiLoading(false);
+        setShowConfirmModal(true);
+    } else {
+        runAiGeneration(currentSchedule);
     }
   };
+  
+  const handleConfirmAndGenerate = () => {
+    const scheduleKey = `${currentYear}-${currentMonth}-${currentWeek}`;
+    const newSchedule = JSON.parse(JSON.stringify(scheduleData[scheduleKey] || {}));
+    const weekDays = getWeekDays(currentYear, currentMonth, currentWeek);
+    const noTreatmentDirector = directors.find(d => d.id === 'dir_none');
 
-  // --- 이벤트 핸들러 ---
+    weekDays.forEach(day => {
+        if (day.isHoliday) return;
+        if (!newSchedule[day.date]) newSchedule[day.date] = {};
+        rooms.forEach(room => {
+            if (room.hasTimeSlots) {
+                if (!newSchedule[day.date][room.name]) newSchedule[day.date][room.name] = {};
+                if (!newSchedule[day.date][room.name].morning) newSchedule[day.date][room.name].morning = {};
+                if (!newSchedule[day.date][room.name].afternoon) newSchedule[day.date][room.name].afternoon = {};
 
+                if (!newSchedule[day.date][room.name].morning.director) {
+                    newSchedule[day.date][room.name].morning.director = noTreatmentDirector;
+                }
+                if (!newSchedule[day.date][room.name].afternoon.director) {
+                    newSchedule[day.date][room.name].afternoon.director = noTreatmentDirector;
+                }
+            }
+        });
+    });
+
+    setScheduleData(prev => ({ ...prev, [scheduleKey]: newSchedule }));
+    setShowConfirmModal(false);
+    runAiGeneration(newSchedule);
+  };
+  
   const handleLogin = () => {
     const account = accounts.find(acc => acc.email === loginForm.email && acc.password === loginForm.password);
     if (account) {
@@ -556,12 +440,10 @@ const App = () => {
 
   const handleRegister = () => {
     if (registerForm.password !== registerForm.confirmPassword) {
-      showNotification('비밀번호가 일치하지 않습니다.');
-      return;
+      showNotification('비밀번호가 일치하지 않습니다.'); return;
     }
     if (accounts.some(acc => acc.email === registerForm.email)) {
-      showNotification('이미 존재하는 이메일입니다.');
-      return;
+      showNotification('이미 존재하는 이메일입니다.'); return;
     }
     const newAccount = { ...registerForm };
     setAccounts(prev => [...prev, newAccount]);
@@ -608,24 +490,16 @@ const App = () => {
       newWeek--;
       if (newWeek < 1) {
         newMonth--;
-        if (newMonth < 1) {
-          newMonth = 12;
-          newYear--;
-        }
-        const lastDayOfPrevMonth = new Date(newYear, newMonth, 0);
-        newWeek = getTodayWeek(lastDayOfPrevMonth);
+        if (newMonth < 1) { newMonth = 12; newYear--; }
+        newWeek = getTodayWeek(new Date(newYear, newMonth, 0));
       }
     } else {
-      const lastDayOfMonth = new Date(newYear, newMonth, 0);
-      const totalWeeks = getTodayWeek(lastDayOfMonth);
+      const totalWeeks = getTodayWeek(new Date(newYear, newMonth, 0));
       newWeek++;
       if (newWeek > totalWeeks) {
         newWeek = 1;
         newMonth++;
-        if (newMonth > 12) {
-          newMonth = 1;
-          newYear++;
-        }
+        if (newMonth > 12) { newMonth = 1; newYear++; }
       }
     }
     setCurrentYear(newYear);
@@ -635,30 +509,21 @@ const App = () => {
 
   const handlePrint = () => {
     const element = document.getElementById('schedule-table-to-print');
-    if (!element || !window.html2canvas) {
-        showNotification('이미지 렌더링 라이브러리를 로드하지 못했습니다.');
-        return;
-    }
+    if (!element || !window.html2canvas) { showNotification('이미지 렌더링 라이브러리를 로드하지 못했습니다.'); return; }
     window.html2canvas(element).then(canvas => {
         const printWindow = window.open('', '_blank');
-        printWindow.document.write('<html><head><title>인쇄</title><style>@media print { body { margin: 0; } img { max-width: 14.8cm; height: auto; } }</style></head><body>');
-        printWindow.document.write('<img src="' + canvas.toDataURL() + '">');
+        printWindow.document.write('<html><head><title>인쇄</title><style>@media print { body { margin: 0; } img { max-width: 100%; height: auto; } }</style></head><body>');
+        printWindow.document.write(`<img src="${canvas.toDataURL()}">`);
         printWindow.document.write('</body></html>');
         printWindow.document.close();
         printWindow.focus();
-        setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-        }, 250);
+        setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
     });
   };
 
   const saveAsPng = () => {
     const element = document.getElementById('schedule-table-to-print');
-    if (!element || !window.html2canvas) {
-        showNotification('이미지 렌더링 라이브러리를 로드하지 못했습니다.');
-        return;
-    }
+    if (!element || !window.html2canvas) { showNotification('이미지 렌더링 라이브러리를 로드하지 못했습니다.'); return; }
     showNotification('PNG 파일을 생성 중입니다...');
     window.html2canvas(element).then(canvas => {
         const link = document.createElement('a');
@@ -670,31 +535,21 @@ const App = () => {
   };
 
   const shareToKakao = () => {
-    if (!window.Kakao || !window.Kakao.isInitialized()) {
-        showNotification('카카오 SDK가 로딩되지 않았습니다. 잠시 후 다시 시도해주세요.');
-        return;
-    }
+    if (!window.Kakao || !window.Kakao.isInitialized()) { showNotification('카카오 SDK가 로딩되지 않았습니다. 잠시 후 다시 시도해주세요.'); return; }
     const element = document.getElementById('schedule-table-to-print');
-    if (!element || !window.html2canvas) {
-        showNotification('이미지 렌더링 라이브러리를 로드하지 못했습니다.');
-        return;
-    }
+    if (!element || !window.html2canvas) { showNotification('이미지 렌더링 라이브러리를 로드하지 못했습니다.'); return; }
     showNotification('공유 이미지를 생성 중입니다...');
     window.html2canvas(element).then(canvas => {
         canvas.toBlob(blob => {
-            window.Kakao.Share.uploadImage({
-                file: [blob],
-            }).then(response => {
+            window.Kakao.Share.uploadImage({ file: [blob] })
+            .then(response => {
                 window.Kakao.Share.sendDefault({
                     objectType: 'feed',
                     content: {
                         title: `${hospitalInfo.name} ${getWeekLabel(currentYear, currentMonth, currentWeek)}`,
                         description: '주간 스케줄을 확인하세요.',
                         imageUrl: response.infos.original.url,
-                        link: {
-                            mobileWebUrl: window.location.href,
-                            webUrl: window.location.href,
-                        },
+                        link: { mobileWebUrl: window.location.href, webUrl: window.location.href },
                     },
                 });
             }).catch(error => {
@@ -705,34 +560,23 @@ const App = () => {
     });
   };
 
-  // --- 드래그 앤 드롭 핸들러 ---
-
   const handleDragStart = (e, item, from = null) => {
     setDraggedItem(item);
     setDraggedFromSchedule(from);
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
+  const handleDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
   
-  const handleDragOverWithHighlight = (e, day, room, timeSlot) => {
-    e.preventDefault();
-    setDragOverTarget({ day, room, timeSlot });
-  };
+  const handleDragOverWithHighlight = (e, day, room, timeSlot) => { e.preventDefault(); setDragOverTarget({ day, room, timeSlot }); };
 
-  const handleDragLeave = () => {
-    setDragOverTarget(null);
-  };
+  const handleDragLeave = () => setDragOverTarget(null);
 
   const removePersonFromSchedule = (day, room, timeSlot, personId) => {
     const scheduleKey = `${currentYear}-${currentMonth}-${currentWeek}`;
     setScheduleData(prev => {
         const newData = JSON.parse(JSON.stringify(prev));
         if (!newData[scheduleKey]?.[day]?.[room]) return prev;
-
         const roomData = newData[scheduleKey][day][room];
         if (roomData.people) {
             roomData.people = roomData.people.filter(p => p.id !== personId);
@@ -751,8 +595,7 @@ const App = () => {
     setDragOverTarget(null);
     if (!draggedItem) return;
 
-    const weekDays = getWeekDays(currentYear, currentMonth, currentWeek);
-    const targetDate = weekDays.find(d => d.date === day)?.actualDate;
+    const targetDate = getWeekDays(currentYear, currentMonth, currentWeek).find(d => d.date === day)?.actualDate;
     if (targetDate && !isEditableDay(targetDate)) {
         showNotification('과거 날짜는 수정할 수 없습니다.');
         return;
@@ -761,10 +604,9 @@ const App = () => {
     const scheduleKey = `${currentYear}-${currentMonth}-${currentWeek}`;
     const daySchedule = scheduleData[scheduleKey]?.[day] || {};
 
-    // 원장 중복 배정 체크
     if (draggedItem.abbrev) {
         for (const roomName in daySchedule) {
-            if (roomName === room) continue; // 같은 진료실은 체크 제외
+            if (roomName === room) continue;
             const roomData = daySchedule[roomName];
             if (roomData.morning?.director?.id === draggedItem.id || roomData.afternoon?.director?.id === draggedItem.id) {
                 showNotification(`${draggedItem.name}은(는) 이미 다른 진료실에 배정되었습니다.`);
@@ -772,7 +614,6 @@ const App = () => {
             }
         }
     }
-
 
     if (draggedFromSchedule) {
         removePersonFromSchedule(draggedFromSchedule.day, draggedFromSchedule.room, draggedFromSchedule.timeSlot, draggedItem.id);
@@ -784,17 +625,12 @@ const App = () => {
         if (!newData[scheduleKey][day]) newData[scheduleKey][day] = {};
         
         const updateSlot = (targetTimeSlot) => {
-            if (!newData[scheduleKey][day][room]) {
-                newData[scheduleKey][day][room] = { morning: { director: null, staff: [] }, afternoon: { director: null, staff: [] } };
-            }
-            if (!newData[scheduleKey][day][room][targetTimeSlot]) {
-                 newData[scheduleKey][day][room][targetTimeSlot] = { director: null, staff: [] };
-            }
+            if (!newData[scheduleKey][day][room]) newData[scheduleKey][day][room] = { morning: { director: null, staff: [] }, afternoon: { director: null, staff: [] } };
+            if (!newData[scheduleKey][day][room][targetTimeSlot]) newData[scheduleKey][day][room][targetTimeSlot] = { director: null, staff: [] };
             const roomData = newData[scheduleKey][day][room];
-
-            if (draggedItem.abbrev) { // Director
+            if (draggedItem.abbrev) {
                 roomData[targetTimeSlot].director = draggedItem;
-            } else { // Staff
+            } else {
                 if (!Array.isArray(roomData[targetTimeSlot].staff)) roomData[targetTimeSlot].staff = [];
                 if (!roomData[targetTimeSlot].staff.some(s => s.id === draggedItem.id)) {
                     roomData[targetTimeSlot].staff.push(draggedItem);
@@ -803,17 +639,11 @@ const App = () => {
         };
 
         if (isFullDayDrop && draggedItem.abbrev) {
-            const currentRoomSchedule = newData[scheduleKey]?.[day]?.[room];
-            if(!currentRoomSchedule?.morning?.director && !currentRoomSchedule?.afternoon?.director) {
-                updateSlot('morning');
-                updateSlot('afternoon');
-            } else {
-                updateSlot('morning');
-                updateSlot('afternoon');
-            }
+            updateSlot('morning');
+            updateSlot('afternoon');
         } else if (timeSlot) {
             updateSlot(timeSlot);
-        } else { // Drop on non-timeslot room
+        } else {
             if (!newData[scheduleKey][day][room]) newData[scheduleKey][day][room] = { people: [] };
             if (!newData[scheduleKey][day][room].people.some(p => p.id === draggedItem.id)) {
                 newData[scheduleKey][day][room].people.push(draggedItem);
@@ -863,8 +693,6 @@ const App = () => {
     });
   };
 
-  // --- 렌더링 컴포넌트 ---
-
   const Notification = () => notification && (
     <div className="fixed top-5 right-5 bg-white border border-gray-200 rounded-lg shadow-lg p-4 z-50 animate-fade-in-out">
       <p className="text-sm text-gray-800">{notification}</p>
@@ -882,48 +710,42 @@ const App = () => {
                     </div>
                     <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                         <h3 className="text-lg leading-6 font-medium text-gray-900">{error.title}</h3>
-                        <div className="mt-2">
-                            <p className="text-sm text-gray-500">{error.message}</p>
-                        </div>
+                        <div className="mt-2"><p className="text-sm text-gray-500">{error.message}</p></div>
                     </div>
                 </div>
                 <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                    <button
-                        type="button"
-                        className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm"
-                        onClick={onClose}
-                    >
-                        확인
-                    </button>
+                    <button type="button" className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm" onClick={onClose}>확인</button>
                 </div>
             </div>
         </div>
     );
   };
 
-  // --- 메인 렌더링 ---
+  const ConfirmModal = ({ onConfirm, onCancel }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-start">
+                <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <AlertTriangle className="h-6 w-6 text-yellow-600" aria-hidden="true" />
+                </div>
+                <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900">원장 자동 배치</h3>
+                    <div className="mt-2"><p className="text-sm text-gray-500">원장이 배정되지 않은 빈 진료가 있습니다. '진료없음'으로 자동 설정하고 스케줄을 생성할까요?</p></div>
+                </div>
+            </div>
+            <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                <button type="button" className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm" onClick={onConfirm}>예</button>
+                <button type="button" className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm" onClick={onCancel}>아니오</button>
+            </div>
+        </div>
+    </div>
+  );
 
   if (!isAuthenticated) {
     return (
       <>
         <Notification />
-        {currentView === 'login' ? (
-          <LoginPage 
-            loginForm={loginForm}
-            setLoginForm={setLoginForm}
-            handleLogin={handleLogin}
-            setCurrentView={setCurrentView}
-            showPassword={showPassword}
-            setShowPassword={setShowPassword}
-          />
-        ) : (
-          <RegisterPage 
-            registerForm={registerForm}
-            setRegisterForm={setRegisterForm}
-            handleRegister={handleRegister}
-            setCurrentView={setCurrentView}
-          />
-        )}
+        {currentView === 'login' ? <LoginPage {...{ loginForm, setLoginForm, handleLogin, setCurrentView, showPassword, setShowPassword }} /> : <RegisterPage {...{ registerForm, setRegisterForm, handleRegister, setCurrentView }} />}
       </>
     );
   }
@@ -937,8 +759,8 @@ const App = () => {
     <div className="min-h-screen bg-gray-50">
       <Notification />
       <AiErrorModal error={aiError} onClose={() => setAiError(null)} />
+      {showConfirmModal && <ConfirmModal onConfirm={handleConfirmAndGenerate} onCancel={() => setShowConfirmModal(false)} />}
       
-      {/* Header */}
       <header className="bg-white shadow-sm p-4 flex justify-between items-center border-b">
         <div className="flex items-center gap-4">
           <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center border hover:border-blue-400">
@@ -947,29 +769,24 @@ const App = () => {
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleIconUpload} className="hidden" />
           <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             {hospitalInfo.name}
-            <button onClick={() => { setTempHospitalName(hospitalInfo.name); setShowHospitalNameModal(true); }} className="p-1 hover:bg-gray-200 rounded-full">
-              <Edit3 size={16} className="text-gray-600" />
-            </button>
+            <button onClick={() => { setTempHospitalName(hospitalInfo.name); setShowHospitalNameModal(true); }} className="p-1 hover:bg-gray-200 rounded-full"><Edit3 size={16} className="text-gray-600" /></button>
           </h1>
         </div>
         <div className="flex items-center gap-4">
           <button onClick={() => setShowPersonnelModal(true)} className="text-sm text-gray-600 hover:text-blue-600">인원 관리</button>
           <button onClick={() => setShowSettingsModal(true)} className="text-sm text-gray-600 hover:text-blue-600">진료실 설정</button>
-          <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700">
-            <LogOut size={16} /> 로그아웃
-          </button>
+          <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700"><LogOut size={16} /> 로그아웃</button>
         </div>
       </header>
 
       <div className="flex">
-        {/* Sidebar */}
         <aside className="w-64 bg-white p-4 border-r" onDragOver={handleDragOver} onDrop={handleSidebarDrop}>
           <div className="flex bg-gray-100 rounded-lg p-1 mb-4">
             <button onClick={() => setSelectedTab('원장')} className={`flex-1 py-2 text-sm rounded-md transition-colors ${selectedTab === '원장' ? 'bg-blue-500 text-white shadow' : 'text-gray-600'}`}>원장</button>
             <button onClick={() => setSelectedTab('직원')} className={`flex-1 py-2 text-sm rounded-md transition-colors ${selectedTab === '직원' ? 'bg-green-500 text-white shadow' : 'text-gray-600'}`}>직원</button>
           </div>
           <div className="space-y-2">
-            {(selectedTab === '원장' ? sortKorean(directors) : sortKorean(staff)).map(person => (
+            {(selectedTab === '원장' ? sortKorean(directors, 'name') : sortKorean(staff, 'name')).map(person => (
               <div key={person.id} draggable={hasEditableDay} onDragStart={(e) => handleDragStart(e, person)}
                 className={`p-3 rounded-lg flex items-center gap-3 text-sm border ${!hasEditableDay ? 'opacity-50 cursor-not-allowed' : 'cursor-move hover:shadow-md'}
                   ${selectedTab === '원장' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
@@ -982,41 +799,23 @@ const App = () => {
           {!hasEditableDay && <p className="text-xs text-center mt-4 text-red-500 bg-red-50 p-2 rounded-md">과거 날짜는 수정할 수 없습니다.</p>}
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 p-6">
           <div className="flex items-center gap-4 mb-6">
             <button onClick={() => changeWeek('prev')} className="p-2 border rounded-md bg-white hover:bg-gray-100"><ChevronLeft size={20} /></button>
             <h2 className="text-lg font-semibold text-gray-800 bg-white px-6 py-2 rounded-md border min-w-[200px] text-center">{getWeekLabel(currentYear, currentMonth, currentWeek)}</h2>
             <button onClick={() => changeWeek('next')} className="p-2 border rounded-md bg-white hover:bg-gray-100"><ChevronRight size={20} /></button>
-            <button 
-                onClick={generateScheduleWithAI}
-                disabled={isAiLoading}
-                className="ml-4 p-2 border rounded-md bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
-            >
-                {isAiLoading ? (
-                    <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        생성 중...
-                    </>
-                ) : (
-                    <>
-                        <Sparkles size={16} /> ✨ AI 스케줄 자동 생성
-                    </>
-                )}
+            <button onClick={handleGenerateClick} disabled={isAiLoading} className="ml-4 p-2 border rounded-md bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm">
+                {isAiLoading ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>생성 중...</> : <><Sparkles size={16} /> ✨ AI 스케줄 자동 생성</>}
             </button>
-            <button onClick={() => setShowShareModal(true)} className="ml-auto p-2 border rounded-md bg-white hover:bg-gray-100 flex items-center gap-2 text-sm">
-                <Printer size={16} /> 공유/인쇄
-            </button>
+            <button onClick={() => setShowShareModal(true)} className="ml-auto p-2 border rounded-md bg-white hover:bg-gray-100 flex items-center gap-2 text-sm"><Printer size={16} /> 공유/인쇄</button>
           </div>
 
           <div id="schedule-table-to-print" className="bg-white rounded-lg shadow-md border overflow-hidden">
             <div className="grid grid-cols-8">
               <div className="bg-gray-600 text-white p-3 text-center font-bold border-r">구분</div>
-              {weekDays.map((day, i) => (
-                <div key={i} className={`p-3 text-center text-sm font-semibold border-r ${day.color} ${day.isHoliday ? 'text-red-600' : 'text-gray-700'}`}>{day.date}</div>
-              ))}
+              {weekDays.map((day, i) => (<div key={i} className={`p-3 text-center text-sm font-semibold border-r ${day.color} ${day.isHoliday ? 'text-red-600' : 'text-gray-700'}`}>{day.date}</div>))}
             </div>
-            {[...orderedRooms, rooms.find(r => r.name === 'OFF')].map(room => (
+            {[...orderedRooms, rooms.find(r => r.name === 'OFF')].map(room => room && (
               <div key={room.id} className="grid grid-cols-8 border-t">
                 <div className="bg-gray-600 text-white p-3 text-center font-bold border-r">{room.name}</div>
                 {weekDays.map((day, i) => {
@@ -1041,12 +840,12 @@ const App = () => {
                   }
 
                   return (
-                    <div key={i} className="p-2 border-r space-y-2 min-h-[60px]" onDragOver={isEditable ? (e) => handleDragOverWithHighlight(e, day.date, room.name, null) : null} onDragLeave={handleDragLeave} onDrop={isEditable ? (e) => handleDrop(e, day.date, room.name, null, true) : null}>
+                    <div key={i} className="p-2 border-r space-y-2 min-h-[60px]" onDragOver={isEditable ? (e) => handleDragOver(e) : null} onDrop={isEditable ? (e) => handleDrop(e, day.date, room.name, null, true) : null}>
                       {['morning', 'afternoon'].map(timeSlot => {
                           const slotData = daySchedule?.[timeSlot];
                           const isHighlighted = dragOverTarget?.day === day.date && dragOverTarget?.room === room.name && dragOverTarget?.timeSlot === timeSlot;
                           return (
-                              <div key={timeSlot} onDragOver={isEditable ? (e) => handleDragOverWithHighlight(e, day.date, room.name, timeSlot) : null} onDragLeave={handleDragLeave} onDrop={isEditable ? (e) => handleDrop(e, day.date, room.name, timeSlot) : null}
+                              <div key={timeSlot} onDragOver={isEditable ? (e) => { e.stopPropagation(); handleDragOverWithHighlight(e, day.date, room.name, timeSlot); } : null} onDragLeave={handleDragLeave} onDrop={isEditable ? (e) => { e.stopPropagation(); handleDrop(e, day.date, room.name, timeSlot); } : null}
                                   className={`p-2 rounded-md border-2 border-dashed min-h-[40px] ${isEditable ? 'hover:border-blue-400' : 'border-gray-200 bg-gray-50'} ${isHighlighted ? 'ring-2 ring-blue-500' : ''}
                                       ${timeSlot === 'morning' ? 'border-yellow-300' : 'border-indigo-300'}`}>
                                   <div className="text-xs text-gray-500">{timeSlot === 'morning' ? '오전' : '오후'}</div>
@@ -1077,14 +876,10 @@ const App = () => {
         </main>
       </div>
 
-      {/* Modals */}
       {showPersonnelModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
           <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">인원 관리</h3>
-              <button onClick={() => setShowPersonnelModal(false)}><X size={20} /></button>
-            </div>
+            <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold">인원 관리</h3><button onClick={() => setShowPersonnelModal(false)}><X size={20} /></button></div>
             <div className="bg-gray-50 p-4 rounded-md mb-4">
                 <h4 className="font-semibold mb-2">새 인원 추가</h4>
                 <div className="flex gap-2 mb-2">
@@ -1092,10 +887,7 @@ const App = () => {
                     <input value={newPersonName} onChange={e => setNewPersonName(e.target.value)} placeholder="이름" className="flex-1 border px-2 py-1 rounded-md" />
                 </div>
                 <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={isNewStaff} onChange={e => setIsNewStaff(e.target.checked)} />
-                        신규 직원
-                    </label>
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={isNewStaff} onChange={e => setIsNewStaff(e.target.checked)} />신규 직원</label>
                     <div className="flex gap-2">
                         <button onClick={() => { if(newPersonName && newPersonAbbrev) { setDirectors(prev => sortKorean([...prev, {id: `d${Date.now()}`, name: newPersonName, abbrev: newPersonAbbrev}])); setNewPersonAbbrev(''); setNewPersonName(''); } }} className="text-sm bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600">원장 추가</button>
                         <button onClick={() => { if(newPersonName) { setStaff(prev => sortKorean([...prev, {id: `s${Date.now()}`, name: newPersonName, isNew: isNewStaff}])); setNewPersonName(''); setIsNewStaff(false); } }} className="text-sm bg-green-500 text-white px-3 py-1 rounded-md hover:bg-green-600">직원 추가</button>
@@ -1104,15 +896,12 @@ const App = () => {
             </div>
             <div>
               <h4 className="font-semibold mb-2">원장 목록</h4>
-              {sortKorean(directors).map(d => <div key={d.id} className="flex justify-between items-center p-2 bg-blue-50 rounded-md mb-1"><span className="text-sm">{d.name} ({d.abbrev})</span><button onClick={() => setDirectors(prev => prev.filter(p => p.id !== d.id))} className="text-red-500"><X size={16} /></button></div>)}
+              {sortKorean(directors, 'name').map(d => <div key={d.id} className="flex justify-between items-center p-2 bg-blue-50 rounded-md mb-1"><span className="text-sm">{d.name} ({d.abbrev})</span>{!d.isFixed && <button onClick={() => setDirectors(prev => prev.filter(p => p.id !== d.id))} className="text-red-500"><X size={16} /></button>}</div>)}
             </div>
             <div className="mt-4">
               <h4 className="font-semibold mb-2">직원 목록</h4>
-              {sortKorean(staff).map(s => <div key={s.id} className="flex justify-between items-center p-2 bg-green-50 rounded-md mb-1">
-                <div className="flex items-center gap-2">
-                    <span className="text-sm">{s.name}</span>
-                    {s.isNew && <span className="w-5 h-5 bg-yellow-400 text-white text-xs font-bold flex items-center justify-center rounded-full">N</span>}
-                </div>
+              {sortKorean(staff, 'name').map(s => <div key={s.id} className="flex justify-between items-center p-2 bg-green-50 rounded-md mb-1">
+                <div className="flex items-center gap-2"><span className="text-sm">{s.name}</span>{s.isNew && <span className="w-5 h-5 bg-yellow-400 text-white text-xs font-bold flex items-center justify-center rounded-full">N</span>}</div>
                 <button onClick={() => setStaff(prev => prev.filter(p => p.id !== s.id))} className="text-red-500"><X size={16} /></button>
               </div>)}
             </div>
@@ -1123,10 +912,7 @@ const App = () => {
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
           <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">진료실 설정</h3>
-              <button onClick={() => setShowSettingsModal(false)}><X size={20} /></button>
-            </div>
+            <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold">진료실 설정</h3><button onClick={() => setShowSettingsModal(false)}><X size={20} /></button></div>
             <div className="bg-gray-50 p-4 rounded-md mb-4">
                 <h4 className="font-semibold mb-2">새 진료실 추가</h4>
                 <input value={newRoomName} onChange={e => setNewRoomName(e.target.value)} placeholder="진료실명" className="w-full border px-2 py-1 rounded-md mb-2" />
@@ -1178,20 +964,11 @@ const App = () => {
       {showShareModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
           <div className="bg-white rounded-lg p-6 w-full max-w-sm">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold">공유 및 인쇄</h3>
-                <button onClick={() => setShowShareModal(false)}><X size={20} /></button>
-            </div>
+            <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold">공유 및 인쇄</h3><button onClick={() => setShowShareModal(false)}><X size={20} /></button></div>
             <div className="space-y-3">
-                <button onClick={saveAsPng} className="w-full p-3 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
-                    PNG로 저장
-                </button>
-                <button onClick={shareToKakao} className="w-full p-3 bg-yellow-400 text-black rounded-md hover:bg-yellow-500 transition-colors flex items-center justify-center gap-2">
-                    카카오톡으로 공유
-                </button>
-                <button onClick={handlePrint} className="w-full p-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center justify-center gap-2">
-                    <Printer size={18} /> 인쇄하기
-                </button>
+                <button onClick={saveAsPng} className="w-full p-3 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors flex items-center justify-center gap-2">PNG로 저장</button>
+                <button onClick={shareToKakao} className="w-full p-3 bg-yellow-400 text-black rounded-md hover:bg-yellow-500 transition-colors flex items-center justify-center gap-2">카카오톡으로 공유</button>
+                <button onClick={handlePrint} className="w-full p-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"><Printer size={18} /> 인쇄하기</button>
             </div>
           </div>
         </div>
