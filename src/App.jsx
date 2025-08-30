@@ -355,8 +355,7 @@ const App = () => {
   const sortKorean = (items, key = 'name') => {
     return [...items].sort((a, b) => a[key].localeCompare(b[key], 'ko'));
   };
-
-  // --- Gemini API 호출 함수 (수정됨) ---
+// --- Gemini API 호출 함수 (수정됨) ---
   const generateScheduleWithAI = async () => {
     const weekDays = getWeekDays(currentYear, currentMonth, currentWeek);
     const scheduleKey = `${currentYear}-${currentMonth}-${currentWeek}`;
@@ -399,6 +398,145 @@ const App = () => {
         offSchedule.people.forEach(p => offStaffByDay[day.date].push(p.name));
       }
     });
+    
+    const prompt = `
+      You are an expert hospital scheduler. Your task is to complete a weekly work schedule by assigning only the staff members. The directors have already been manually assigned.
+
+      1. Personnel Information:
+      - Existing Staff: ${staff.filter(s => !s.isNew).map(s => s.name).join(', ')}
+      - New Staff: ${staff.filter(s => s.isNew).map(s => s.name).join(', ')}
+
+      2. Current Schedule State (Directors are pre-assigned, some staff might be OFF):
+      ${JSON.stringify(currentSchedule, null, 2)}
+
+      3. Dates for this week:
+      ${weekDays.map(d => `- ${d.date}${d.isHoliday ? ` (${d.holidayName}, Holiday)` : ''}`).join('\n')}
+
+      4. Scheduling Rules for STAFF ONLY:
+      - Your goal is to assign staff to work with the pre-assigned directors. DO NOT change the director assignments.
+      - Distribute staff assignments as fairly and evenly as possible among all directors throughout the week.
+      - In rooms marked 'New staff pairing allowed' (${rooms.filter(r => r.allowNewStaffPairing).map(r=>r.name).join(', ')}), you MUST pair one new staff member with one existing staff member in each AM/PM slot.
+      - New staff cannot work alone.
+      - A staff member cannot be in multiple places at once on the same day.
+      - Do not assign any staff to work on holidays.
+      - Staff listed in 'OFF' for a specific day must NOT be assigned any other work on that day. For example: ${JSON.stringify(offStaffByDay)}
+      - Fill in the staff for 'Injection' and 'Surgery' rooms as well, following the same fairness and pairing rules where applicable.
+      - The final output must be a complete JSON object for the entire week's schedule, including the pre-assigned directors and the staff you assign. Strictly follow the provided JSON schema. Do not add any other text or explanations.
+    `;
+
+    const personSchema = {
+        type: "OBJECT",
+        properties: {
+            id: { type: "STRING" },
+            name: { type: "STRING" },
+            abbrev: { type: "STRING", nullable: true },
+            isNew: { type: "BOOLEAN", nullable: true },
+        },
+        nullable: true,
+    };
+
+    const timeSlotSchema = {
+      type: "OBJECT",
+      properties: {
+        director: personSchema,
+        staff: {
+            type: "ARRAY",
+            items: personSchema
+        },
+      },
+    };
+
+    const roomProperties = {};
+    weekDays.forEach(day => {
+        const dayProperties = {};
+        rooms.forEach(room => {
+            if (room.hasTimeSlots) {
+                dayProperties[room.name] = {
+                    type: "OBJECT",
+                    properties: {
+                        morning: timeSlotSchema,
+                        afternoon: timeSlotSchema,
+                    },
+                };
+            } else {
+                dayProperties[room.name] = {
+                    type: "OBJECT",
+                    properties: {
+                        people: {
+                            type: "ARRAY",
+                            items: personSchema,
+                        },
+                    },
+                };
+            }
+        });
+        roomProperties[day.date] = {
+            type: "OBJECT",
+            properties: dayProperties,
+        };
+    });
+
+    const schema = {
+      type: "OBJECT",
+      properties: roomProperties,
+    };
+    
+    try {
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-preview-0514:generateContent?key=${apiKey}`;
+
+        const payload = {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: schema,
+          },
+        };
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            let errorBodyText = await response.text();
+            console.error("API Error Body:", errorBodyText);
+            let errorMessage = `API call failed with status: ${response.status}`;
+            try {
+                const errorBodyJson = JSON.parse(errorBodyText);
+                errorMessage = errorBodyJson?.error?.message || errorMessage;
+            } catch (parseError) {
+                if (errorBodyText) {
+                    errorMessage = errorBodyText;
+                }
+            }
+            throw new Error(errorMessage);
+        }
+
+        const result = await response.json();
+        
+        if (!result.candidates || !result.candidates[0].content?.parts?.[0]?.text) {
+            throw new Error("Invalid API response structure. The model may have failed to generate a valid schedule.");
+        }
+
+        const generatedJsonText = result.candidates[0].content.parts[0].text;
+        const generatedSchedule = JSON.parse(generatedJsonText);
+        
+        setScheduleData(prev => ({
+            ...prev,
+            [scheduleKey]: generatedSchedule
+        }));
+
+        showNotification('✅ AI 스케줄이 성공적으로 생성되었습니다!');
+
+    } catch (error) {
+        console.error("Gemini API Error:", error);
+        setAiError({ title: 'AI 스케줄 생성 실패', message: `오류가 발생했습니다: ${error.message}` });
+    } finally {
+        setIsAiLoading(false);
+    }
+  };
     
     const prompt = `
       You are an expert hospital scheduler. Your task is to complete a weekly work schedule by assigning only the staff members. The directors have already been manually assigned.
